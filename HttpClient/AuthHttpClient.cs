@@ -3,8 +3,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using CargoManagementAPI.Models;
+using CargoManagementAPI.Models.UserInfo;
 using Newtonsoft.Json;
-using OAuthWebApp.Models;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 

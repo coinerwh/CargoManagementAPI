@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace OAuthWebApp.Models
+namespace CargoManagementAPI.Models.UserInfo
 {
     public class UserInfo
     {

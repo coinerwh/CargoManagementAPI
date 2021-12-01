@@ -7,7 +7,7 @@ namespace CargoManagementAPI.Services
 {
     public class ValidationService
     {
-        private const string ClientId = "868479051405-6oj0nnara8l9do8iro9f41pft3d6n455.apps.googleusercontent.com";
+        private const string ClientId = "392347561763-iihp7j423rvuc6hcv1mj6so0ec85f6oa.apps.googleusercontent.com";
         
         public async Task<string> ValidateAndGetAuthTokenSubject(HttpContext context)
         {
@@ -31,7 +31,7 @@ namespace CargoManagementAPI.Services
             return tokenPayload?.Subject;
         }
         
-        private async Task<JsonWebToken.Payload> ValidateToken(string idToken)
+        public async Task<JsonWebToken.Payload> ValidateToken(string idToken)
         {
             try
             {

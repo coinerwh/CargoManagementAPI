@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using CargoManagementAPI.HttpClient;
 using CargoManagementAPI.Models;
 using CargoManagementAPI.Queries;
+using CargoManagementAPI.Services;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,7 +12,6 @@ namespace CargoManagementAPI.Controllers
 {
     [Route("oauth")]
     [ApiController]
-    // [EnableCors("CorsPolicy")]
     public class OAuthController : Controller
     {
         private const string ClientId = "392347561763-iihp7j423rvuc6hcv1mj6so0ec85f6oa.apps.googleusercontent.com";
@@ -19,11 +19,15 @@ namespace CargoManagementAPI.Controllers
 
         private readonly QueryState query;
         private readonly AuthHttpClient http;
+        private readonly ValidationService valService;
+        private readonly IQueryUsers userQuery;
         
-        public OAuthController(QueryState queryBoats, AuthHttpClient http)
+        public OAuthController(QueryState queryBoats, AuthHttpClient http, ValidationService valService, IQueryUsers userQuery)
         {
             query = queryBoats;
             this.http = http;
+            this.valService = valService;
+            this.userQuery = userQuery;
         }
 
         [HttpGet]
@@ -38,7 +42,19 @@ namespace CargoManagementAPI.Controllers
             var response = await http.GetAccessToken(code, ClientId, ClientSecret, url);
             var token = response.IdToken;
             
-            Response.Redirect($"/userinfo?token={token}");
+            // validate token and get subject
+            var tokenPayload = await valService.ValidateToken(token);
+            var userId = tokenPayload.Subject;
+            
+            // query datastore to see if subject already exists
+            var userList = userQuery.GetUserIdsQuery();
+            if (!userList.Exists(sub => sub == userId))
+            {
+                // post new user in datastore
+                userQuery.CreateUserQuery(userId);
+            }
+
+            Response.Redirect($"/userinfo?token={token}&userId={userId}");
         }
         
         [HttpGet("signin")]

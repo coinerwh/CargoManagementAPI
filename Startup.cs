@@ -26,6 +26,7 @@ namespace CargoManagementAPI
             services.AddControllersWithViews();
             services.AddScoped<IQueryBoats, QueryBoats>();
             services.AddScoped<IQueryLoads, QueryLoads>();
+            services.AddScoped<IQueryUsers, QueryUsers>();
             services.AddScoped<QueryState>();
             services.AddScoped<AuthHttpClient>();
             services.AddScoped <ValidationService>();

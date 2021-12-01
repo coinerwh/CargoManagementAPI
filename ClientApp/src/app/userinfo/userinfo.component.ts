@@ -9,6 +9,7 @@ import {HttpClient} from "@angular/common/http";
   <div class="userinfo">
     <h1>User Info</h1>
     <p>This page displays the token provided by Google that authorizes access to protected API resources</p>
+    <p>UserId: {{userId}}</p>
     <p>Token:</p>
     <textarea>{{token}}</textarea>
 </div>
@@ -16,6 +17,7 @@ import {HttpClient} from "@angular/common/http";
 })
 export class UserInfoComponent implements OnInit {
   token: string;
+  userId: string;
   baseUrl: string;
   http: HttpClient
 
@@ -29,6 +31,7 @@ export class UserInfoComponent implements OnInit {
     this.route.queryParams
       .subscribe(params => {
         this.token = params.token;
+        this.userId = params.userId;
       })
   }
 }

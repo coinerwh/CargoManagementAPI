@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace OAuthWebApp.Models
+namespace CargoManagementAPI.Models.UserInfo
 {
     public class UserDto
     {
