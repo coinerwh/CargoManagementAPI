@@ -73,7 +73,7 @@ namespace CargoManagementAPI.Queries
         
         private int GetNumOfLoads()
         {
-            var query = new Query("Boat");
+            var query = new Query("Load");
             var results = db.RunQuery(query);
             var loads = results.Entities;
             return loads.Count;
@@ -162,6 +162,36 @@ namespace CargoManagementAPI.Queries
                 ["content"] = editedLoad.Content == null ? loadResult.Content : editedLoad.Content,
                 ["creation_date"] = loadResult.CreationDate,
                 ["volume"] = editedLoad.Volume == null ? loadResult.Volume : editedLoad.Volume
+            };
+            using (DatastoreTransaction transaction = db.BeginTransaction())
+            {
+                transaction.Update(load);
+                CommitResponse commitResponse = transaction.Commit();
+                Key insertedKey = commitResponse.MutationResults[0].Key;
+                // The key is also propagated to the entity
+                Console.WriteLine($"Entity key: {load.Key}");
+            }
+            
+            var result = this.GetLoadQuery(loadId, uriString, "");
+            return result;
+        }
+
+        public LoadDto EditLoadQuery(long loadId, LoadDto editedLoad, string uriString)
+        {
+            var loadResult = this.GetLoadQuery(loadId, uriString, "");
+
+            if (loadResult == null)
+            {
+                return null;
+            }
+            
+            Entity load = new Entity()
+            {
+                Key = keyFactory.CreateKey(loadId),
+                ["carrier"] = loadResult.Carrier == null ? Value.ForNull() : loadResult.Carrier.Id,
+                ["content"] = editedLoad.Content,
+                ["creation_date"] = loadResult.CreationDate,
+                ["volume"] = editedLoad.Volume
             };
             using (DatastoreTransaction transaction = db.BeginTransaction())
             {
@@ -266,7 +296,7 @@ namespace CargoManagementAPI.Queries
             var uriString = baseUri + $"/boats/{boatId}";
 
             var boatQuery = new QueryBoats();
-            var boat = boatQuery.GetBoatQuery((long) boatId, uriString, baseUri, tokenSubject);
+            var boat = boatQuery.GetBoatNoTokenQuery((long) boatId, uriString, baseUri);
             if (boat == null)
                 return null;
             

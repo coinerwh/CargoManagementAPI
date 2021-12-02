@@ -13,7 +13,7 @@ namespace CargoManagementAPI.Queries
         public BoatDto EditBoatQuery(long boatId, BoatDto editedBoat, string uriString, string tokenSubject);
         public (bool,bool) AddLoadToBoatQuery(long boatId, long loadId);
         public (bool, bool) RemoveLoadFromBoatQuery(long boatId, long loadId);
-        public bool DeleteBoatQuery(long boatId);
+        public bool DeleteBoatQuery(long boatId, string tokenSubject);
         public bool VerifyNameIsUnique(string name, string tokenSubject);
         public bool VerifyName(string name);
         public bool VerifyType(string type);

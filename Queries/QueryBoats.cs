@@ -141,6 +141,35 @@ namespace CargoManagementAPI.Queries
 
             return boat.Owner != tokenSubject ? null : boat;
         }
+        
+        public BoatDto GetBoatNoTokenQuery(long boatId, string uriString, string baseUri)
+        {
+            Query query = new Query("Boat")
+            {
+                Filter = Filter.Equal("__key__", 
+                    keyFactory.CreateKey(boatId))
+            };
+            var results = db.RunQuery(query).Entities;
+
+            if (results.Count == 0)
+            {
+                return null;
+            }
+
+            var result = results[0];
+            var boat = new BoatDto()
+            {
+                Id = result.Key.Path[0].Id,
+                Length = (int) result["length"],
+                Name = (string) result["name"],
+                Owner = (string) result["owner"],
+                Loads = CreateLoadsObject((long[]) result["loads"], baseUri),
+                Type = (string) result["type"],
+                Self = uriString
+            };
+
+            return boat;
+        }
 
         public BoatDto CreateBoatQuery(BoatDto newBoat, string uriString, string tokenSubject)
         {
@@ -261,13 +290,10 @@ namespace CargoManagementAPI.Queries
 
         public (bool,bool) AddLoadToBoatQuery(long boatId, long loadId)
         {
-            // might need to get token subject ??
-            var tokenSubject = "";
-            
             var loadQuery = new QueryLoads();
             
             // check for boat and load exists
-            var boatResult = GetBoatQuery(boatId, "","", tokenSubject);
+            var boatResult = GetBoatNoTokenQuery(boatId, "","");
             if (boatResult == null)
                 return (false,true);
 
@@ -293,6 +319,7 @@ namespace CargoManagementAPI.Queries
             {
                 Key = keyFactory.CreateKey(boatId),
                 ["loads"] = newLoads,
+                ["owner"] = boatResult.Owner,
                 ["length"] = boatResult.Length,
                 ["name"] = boatResult.Name,
                 ["type"] = boatResult.Type
@@ -314,12 +341,10 @@ namespace CargoManagementAPI.Queries
 
         public (bool, bool) RemoveLoadFromBoatQuery(long boatId, long loadId)
         {
-            // might need to get token subject ???
-            var tokenSubject = "";
             var loadQuery = new QueryLoads();
             
             // check for boat and load exists
-            var boatResult = GetBoatQuery(boatId, "","", tokenSubject);
+            var boatResult = GetBoatNoTokenQuery(boatId, "","");
             if (boatResult == null)
                 return (false,true);
 
@@ -354,6 +379,7 @@ namespace CargoManagementAPI.Queries
                 Key = keyFactory.CreateKey(boatId),
                 ["loads"] = newLoads,
                 ["length"] = boatResult.Length,
+                ["owner"] = boatResult.Owner,
                 ["name"] = boatResult.Name,
                 ["type"] = boatResult.Type
             };
@@ -402,19 +428,11 @@ namespace CargoManagementAPI.Queries
             return false;
         }
 
-        public bool DeleteBoatQuery(long boatId)
+        public bool DeleteBoatQuery(long boatId, string tokenSubject)
         {
-            // might need to get token subject ??
-            var tokenSubject = "";
-            
-            Query query = new Query("Boat")
-            {
-                Filter = Filter.Equal("__key__", 
-                    keyFactory.CreateKey(boatId))
-            };
-            var results = db.RunQuery(query).Entities;
+            var boatResult = GetBoatQuery(boatId, "", "", tokenSubject);
 
-            if (results.Count == 0)
+            if (boatResult == null)
             {
                 return false;
             }

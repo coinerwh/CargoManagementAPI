@@ -179,8 +179,6 @@ namespace CargoManagementAPI.Controllers
         [HttpPut("{boatId}/loads/{loadId}")]
         public ActionResult AddLoadToBoat(long boatId, long loadId)
         {
-            var addResult = query.AddLoadToBoatQuery(boatId, loadId);
-            
             // check that Accept response type is JSON or any
             var acceptType = Request.Headers["Accept"];
             if (!acceptType.Contains("application/json") && !acceptType.Contains("*/*"))
@@ -189,6 +187,8 @@ namespace CargoManagementAPI.Controllers
                                              ". API can only return application/json");
                 return StatusCode(406, error);
             }
+            
+            var addResult = query.AddLoadToBoatQuery(boatId, loadId);
 
             if (!addResult.Item1)
             {
@@ -204,10 +204,8 @@ namespace CargoManagementAPI.Controllers
         }
 
         [HttpDelete("{boatId}")]
-        public ActionResult DeleteBoat(long boatId)
+        public async Task<ActionResult> DeleteBoat(long boatId)
         {
-            var deleteSuccess = query.DeleteBoatQuery(boatId);
-            
             // check that Accept response type is JSON or any
             var acceptType = Request.Headers["Accept"];
             if (!acceptType.Contains("application/json") && !acceptType.Contains("*/*"))
@@ -216,10 +214,19 @@ namespace CargoManagementAPI.Controllers
                                              ". API can only return application/json");
                 return StatusCode(406, error);
             }
+            
+            var tokenSubject = await valService.ValidateAndGetAuthTokenSubject(HttpContext);
+            if (tokenSubject == null)
+            {
+                var error = new ErrorMessage("Token not provided or is invalid");
+                return StatusCode(403,error);
+            }
+            
+            var deleteSuccess = query.DeleteBoatQuery(boatId, tokenSubject);
 
             if (!deleteSuccess)
             {
-                var error = new ErrorMessage("No boat with this boat_id exists");
+                var error = new ErrorMessage("No boat with this boat_id exists or token provided doesn't match boat owner");
                 return NotFound(error);
             }
 
