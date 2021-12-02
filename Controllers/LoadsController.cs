@@ -1,6 +1,7 @@
 using CargoManagementAPI.Models;
 using CargoManagementAPI.Queries;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 
 namespace CargoManagementAPI.Controllers
 {
@@ -57,6 +58,32 @@ namespace CargoManagementAPI.Controllers
             var loadResult = query.CreateLoadQuery(newLoad, uriString);
 
             return StatusCode(201, loadResult);
+        }
+
+        [HttpPatch("{loadId}")]
+        public ActionResult UpdateLoad([FromBody] LoadDto editedLoad, long loadId)
+        {
+            // check that Accept response type is JSON or any
+            var acceptType = Request.Headers["Accept"];
+            if (!acceptType.Contains("application/json") && !acceptType.Contains("*/*"))
+            {
+                var error = new ErrorMessage("API does not return requests of type " + acceptType +
+                                             ". API can only return application/json");
+                return StatusCode(406, error);
+            }
+            
+            var uriString =
+                $"{$"https://{this.Request.Host}{this.Request.PathBase}{this.Request.Path}"}";
+            
+            var load = query.UpdateLoadQuery(loadId, editedLoad, uriString);
+            
+            if (load == null)
+            {
+                var error = new ErrorMessage("No load with this load_id exists");
+                return NotFound(error);
+            }
+
+            return Ok(load);
         }
 
         [HttpDelete("{loadId}")]

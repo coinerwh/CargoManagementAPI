@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Web;
 using CargoManagementAPI.Models;
 using Google.Cloud.Datastore.V1;
@@ -18,15 +19,16 @@ namespace CargoManagementAPI.Queries
             db = DatastoreDb.Create(projectId);
             keyFactory = db.CreateKeyFactory("Boat");
         }
-        
-        public BoatsDto GetBoatsQuery(string uriString, string baseUri, string pageCursor = "")
+
+        public BoatsDto GetBoatsQuery(string uriString, string baseUri,  string tokenSubject, string pageCursor = "")
         {
             pageCursor = HttpUtility.HtmlDecode(pageCursor);
             var boatArray = new List<BoatDto>();
 
             Query query = new Query("Boat")
             {
-                Limit = 3,
+                Limit = 5,
+                Filter = Filter.Equal("owner", tokenSubject)
             };
             if (!string.IsNullOrEmpty(pageCursor))
                 query.StartCursor = ByteString.FromBase64(pageCursor);
@@ -48,6 +50,7 @@ namespace CargoManagementAPI.Queries
                     Name = (string) currBoat["name"],
                     Type = (string) currBoat["type"],
                     Loads = CreateLoadsObject((long[]) currBoat["loads"], baseUri),
+                    Owner = (string) currBoat["owner"],
                     Self = uriString + $"/{currBoat.Key.Path[0].Id}"
                 };
                 boatArray.Add(boat);
@@ -56,10 +59,29 @@ namespace CargoManagementAPI.Queries
             BoatsDto boatsResult = new BoatsDto()
             {
                 Results = boatArray,
+                TotalNumOfBoats = GetNumOfBoats(tokenSubject),
                 Next = newPageCursor == null ? null : uriString + $"/?pageCursor={newPageCursor}"
             };
 
             return boatsResult;
+        }
+
+        private int GetNumOfBoats(string tokenSubject)
+        {
+            var boatArray = new List<BoatDto>();
+            var query = new Query("Boat");
+            var results = db.RunQuery(query);
+            var boats = results.Entities;
+            foreach(var boat in boats)
+            {
+                var newBoat = new BoatDto()
+                {
+                    Owner = (string) boat["owner"]
+                };
+                if (tokenSubject != null && newBoat.Owner == tokenSubject)
+                    boatArray.Add(newBoat);
+            }
+            return boatArray.Count;
         }
         
         public List<BoatDto> GetBoatsNoPagingQuery(string uriString)
@@ -81,6 +103,7 @@ namespace CargoManagementAPI.Queries
                     Length = (int) currBoat["length"],
                     Name = (string) currBoat["name"],
                     Type = (string) currBoat["type"],
+                    Owner = (string) currBoat["owner"],
                     Loads = CreateLoadsObject((long[]) currBoat["loads"], uriString),
                     Self = uriString + $"/{currBoat.Key.Path[0].Id}"
                 };
@@ -90,7 +113,7 @@ namespace CargoManagementAPI.Queries
             return boatArray;
         }
 
-        public BoatDto GetBoatQuery(long boatId, string uriString, string baseUri)
+        public BoatDto GetBoatQuery(long boatId, string uriString, string baseUri, string tokenSubject)
         {
             Query query = new Query("Boat")
             {
@@ -110,32 +133,16 @@ namespace CargoManagementAPI.Queries
                 Id = result.Key.Path[0].Id,
                 Length = (int) result["length"],
                 Name = (string) result["name"],
+                Owner = (string) result["owner"],
                 Loads = CreateLoadsObject((long[]) result["loads"], baseUri),
                 Type = (string) result["type"],
                 Self = uriString
             };
 
-            return boat;
+            return boat.Owner != tokenSubject ? null : boat;
         }
 
-        public List<LoadDto> GetAllLoadsForBoatQuery(long boatId, string baseUri)
-        {
-            var loadQuery = new QueryLoads();
-            var boat = GetBoatQuery(boatId, "", "");
-            if (boat == null)
-                return null;
-
-            var loads = new List<LoadDto>();
-            foreach (var boatLoad in boat.Loads)
-            {
-                var load = loadQuery.GetLoadQuery(boatLoad.Id, baseUri + $"/loads/{boatLoad.Id}", baseUri);
-                loads.Add(load);
-            }
-
-            return loads;
-        }
-
-        public BoatDto CreateBoatQuery(BoatDto newBoat, string uriString)
+        public BoatDto CreateBoatQuery(BoatDto newBoat, string uriString, string tokenSubject)
         {
             long key;
 
@@ -145,6 +152,7 @@ namespace CargoManagementAPI.Queries
                 ["name"] = newBoat.Name,
                 ["type"] = newBoat.Type,
                 ["length"] = newBoat.Length,
+                ["owner"] = tokenSubject,
                 ["loads"] = Array.Empty<long>()
             };
             using (DatastoreTransaction transaction = db.BeginTransaction())
@@ -167,19 +175,99 @@ namespace CargoManagementAPI.Queries
                 Name = newBoat.Name,
                 Length = newBoat.Length,
                 Type = newBoat.Type,
+                Owner = tokenSubject,
                 Loads = new List<BoatLoadsDto>(),
                 Self = uriString + $"/{key}"
             };
 
             return boatResult;
         }
+        
+        public BoatDto UpdateBoatQuery(long boatId, BoatDto editedBoat, string uriString, string tokenSubject)
+        {
+            var boatResult = this.GetBoatQuery(boatId, uriString, "", tokenSubject);
+
+            if (boatResult == null)
+            {
+                return null;
+            }
+
+            long[] loads = new long[boatResult.Loads.Count];
+            for (var i = 0; i < boatResult.Loads.Count; i++)
+            {
+                loads[i] = boatResult.Loads[i].Id;
+            }
+
+            Entity boat = new Entity()
+            {
+                Key = keyFactory.CreateKey(boatId),
+                ["name"] = editedBoat.Name == null ? boatResult.Name : editedBoat.Name,
+                ["type"] = editedBoat.Type == null ? boatResult.Type : editedBoat.Type,
+                ["owner"] = tokenSubject,
+                ["loads"] = loads,
+                ["length"] = editedBoat.Length == null ? boatResult.Length : editedBoat.Length
+            };
+            using (DatastoreTransaction transaction = db.BeginTransaction())
+            {
+                transaction.Update(boat);
+                CommitResponse commitResponse = transaction.Commit();
+                Key insertedKey = commitResponse.MutationResults[0].Key;
+                // The key is also propagated to the entity
+                Console.WriteLine($"Entity key: {boat.Key}");
+            }
+
+            var result = this.GetBoatQuery(boatId, uriString, "", tokenSubject);
+
+            return result;
+        }
+        
+        public BoatDto EditBoatQuery(long boatId, BoatDto editedBoat, string uriString, string tokenSubject)
+        {
+            var boatResult = this.GetBoatQuery(boatId, uriString, "", tokenSubject);
+
+            if (boatResult == null)
+            {
+                return null;
+            }
+            
+            long[] loads = new long[boatResult.Loads.Count];
+            for (var i = 0; i < boatResult.Loads.Count; i++)
+            {
+                loads[i] = boatResult.Loads[i].Id;
+            }
+
+            Entity boat = new Entity()
+            {
+                Key = keyFactory.CreateKey(boatId),
+                ["name"] = editedBoat.Name,
+                ["type"] = editedBoat.Type,
+                ["owner"] = tokenSubject,
+                ["loads"] = loads,
+                ["length"] = editedBoat.Length
+            };
+            using (DatastoreTransaction transaction = db.BeginTransaction())
+            {
+                transaction.Update(boat);
+                CommitResponse commitResponse = transaction.Commit();
+                Key insertedKey = commitResponse.MutationResults[0].Key;
+                // The key is also propagated to the entity
+                Console.WriteLine($"Entity key: {boat.Key}");
+            }
+
+            var result = this.GetBoatQuery(boatId, uriString, "", tokenSubject);
+
+            return result;
+        }
 
         public (bool,bool) AddLoadToBoatQuery(long boatId, long loadId)
         {
+            // might need to get token subject ??
+            var tokenSubject = "";
+            
             var loadQuery = new QueryLoads();
             
             // check for boat and load exists
-            var boatResult = GetBoatQuery(boatId, "","");
+            var boatResult = GetBoatQuery(boatId, "","", tokenSubject);
             if (boatResult == null)
                 return (false,true);
 
@@ -226,10 +314,12 @@ namespace CargoManagementAPI.Queries
 
         public (bool, bool) RemoveLoadFromBoatQuery(long boatId, long loadId)
         {
+            // might need to get token subject ???
+            var tokenSubject = "";
             var loadQuery = new QueryLoads();
             
             // check for boat and load exists
-            var boatResult = GetBoatQuery(boatId, "","");
+            var boatResult = GetBoatQuery(boatId, "","", tokenSubject);
             if (boatResult == null)
                 return (false,true);
 
@@ -314,6 +404,9 @@ namespace CargoManagementAPI.Queries
 
         public bool DeleteBoatQuery(long boatId)
         {
+            // might need to get token subject ??
+            var tokenSubject = "";
+            
             Query query = new Query("Boat")
             {
                 Filter = Filter.Equal("__key__", 
@@ -352,11 +445,53 @@ namespace CargoManagementAPI.Queries
                 Console.WriteLine($"Entity key: {boat.Key}");
             }
             
-            var result = this.GetBoatQuery(boatId, "", "");
+            var result = this.GetBoatQuery(boatId, "", "", tokenSubject);
             if (result == null)
                 return true;
 
             return false;
+        }
+        
+        public bool VerifyNameIsUnique(string name, string tokenSubject)
+        {
+            // get token subject ???
+            var boats = GetBoatsQuery("", "", tokenSubject);
+            foreach (var boat in boats.Results)
+            {
+                if (string.Equals(boat.Name, name, StringComparison.CurrentCultureIgnoreCase))
+                    return false;
+            }
+
+            return true;
+        }
+
+        public bool VerifyName(string name)
+        {
+            if (name.Length > 25)
+                return false;
+
+            if (!name.All(c => char.IsLetterOrDigit(c)))
+                return false;
+
+            return true;
+        }
+
+        public bool VerifyType(string type)
+        {
+            if (type.Length > 25)
+                return false;
+
+            if (!type.All(c => char.IsLetter(c)))
+                return false;
+
+            return true;
+        }
+
+        public bool VerifyLength(int? length)
+        {
+            if (length < 1)
+                return false;
+            return true;
         }
     }
 }

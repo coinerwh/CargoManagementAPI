@@ -9,6 +9,7 @@ namespace CargoManagementAPI.Models
         public string Type { get; set; }
         public int? Length { get; set; }
         public List<BoatLoadsDto> Loads { get; set; }
+        public string Owner { get; set; }
         public string Self { get; set; }
     }
 }

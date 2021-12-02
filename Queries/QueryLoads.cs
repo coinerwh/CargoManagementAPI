@@ -26,7 +26,7 @@ namespace CargoManagementAPI.Queries
 
             Query query = new Query("Load")
             {
-                Limit = 3,
+                Limit = 5,
             };
             if (!string.IsNullOrEmpty(pageCursor))
                 query.StartCursor = ByteString.FromBase64(pageCursor);
@@ -58,14 +58,25 @@ namespace CargoManagementAPI.Queries
                 if (uriString[^1] == '/')
                     uriString = uriString.Remove(uriString.Length - 1, 1);
             }
+
+            var numOfLoads = GetNumOfLoads();
             
             LoadsDto loadsResult = new LoadsDto()
             {
                 Results = loadArray,
+                TotalNumOfLoads = numOfLoads,
                 Next = newPageCursor == null ? null : uriString + $"/?pageCursor={newPageCursor}"
             };
 
             return loadsResult;
+        }
+        
+        private int GetNumOfLoads()
+        {
+            var query = new Query("Boat");
+            var results = db.RunQuery(query);
+            var loads = results.Entities;
+            return loads.Count;
         }
 
         public LoadDto GetLoadQuery(long loadId, string uriString, string baseUri)
@@ -133,6 +144,36 @@ namespace CargoManagementAPI.Queries
             };
 
             return loadResult;
+        }
+
+        public LoadDto UpdateLoadQuery(long loadId, LoadDto editedLoad, string uriString)
+        {
+            var loadResult = this.GetLoadQuery(loadId, uriString, "");
+
+            if (loadResult == null)
+            {
+                return null;
+            }
+
+            Entity load = new Entity()
+            {
+                Key = keyFactory.CreateKey(loadId),
+                ["carrier"] = loadResult.Carrier == null ? Value.ForNull() : loadResult.Carrier.Id,
+                ["content"] = editedLoad.Content == null ? loadResult.Content : editedLoad.Content,
+                ["creation_date"] = loadResult.CreationDate,
+                ["volume"] = editedLoad.Volume == null ? loadResult.Volume : editedLoad.Volume
+            };
+            using (DatastoreTransaction transaction = db.BeginTransaction())
+            {
+                transaction.Update(load);
+                CommitResponse commitResponse = transaction.Commit();
+                Key insertedKey = commitResponse.MutationResults[0].Key;
+                // The key is also propagated to the entity
+                Console.WriteLine($"Entity key: {load.Key}");
+            }
+            
+            var result = this.GetLoadQuery(loadId, uriString, "");
+            return result;
         }
 
         public bool DeleteLoadQuery(long loadId)
@@ -217,13 +258,15 @@ namespace CargoManagementAPI.Queries
 
         private CarrierDto CreateCarrier(long? boatId, string baseUri)
         {
+            // might need to get token subject ???
+            var tokenSubject = "";
             if (boatId == null)
                 return null;
 
             var uriString = baseUri + $"/boats/{boatId}";
 
             var boatQuery = new QueryBoats();
-            var boat = boatQuery.GetBoatQuery((long) boatId, uriString, baseUri);
+            var boat = boatQuery.GetBoatQuery((long) boatId, uriString, baseUri, tokenSubject);
             if (boat == null)
                 return null;
             
