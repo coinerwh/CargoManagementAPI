@@ -61,7 +61,7 @@ namespace CargoManagementAPI.Controllers
         public void EndUserSignIn()
         {
             var state = GenerateState();
-            // query.StoreState(state);
+            query.StoreState(state);
 
             var url = "https://accounts.google.com/o/oauth2/v2/auth?" +
                       "response_type=code&" +
